@@ -548,10 +548,9 @@ render();
       <label for="managementEmail">Email</label><input id="managementEmail" type="email" autocomplete="username" placeholder="Management email" required>
       <label for="managementPassword">Password</label><input id="managementPassword" type="password" autocomplete="current-password" placeholder="Password" required>
       <button class="p" type="submit">Sign in as Management</button></form></div>
-      <div class="loginRole employeeRole"><h3>Employee</h3><p class="mu">Access inventory movement and cycle counts.</p><form onsubmit="event.preventDefault();submitEmployeeLogin()">
-      <label for="employeeEmail">Email</label><input id="employeeEmail" type="email" autocomplete="username" placeholder="Employee email" required>
-      <label for="employeePassword">Password</label><input id="employeePassword" type="password" autocomplete="current-password" placeholder="Password" required>
-      <button class="s" type="submit">Sign in as Employee</button></form></div><div class="msg">${loginMessage || ""}</div></section>`;
+      <div class="loginRole employeeRole"><h3>Employee</h3><p class="mu">No account needed. Employee access is available to anyone with this app link.</p>
+      <button class="s" type="button" onclick="enterEmployeeAccess()">Employee Access</button></div>
+      <div class="msg">${loginMessage || ""}</div></section>`;
   };
 
   submitManagementLogin = function () {
@@ -559,8 +558,32 @@ render();
       document.getElementById("managementPassword")?.value);
   };
   submitEmployeeLogin = function () {
-    signIn("employee", document.getElementById("employeeEmail")?.value,
-      document.getElementById("employeePassword")?.value);
+    window.enterEmployeeAccess();
+  };
+  window.enterEmployeeAccess = async function () {
+    if (!configured()) {
+      loginMessage = '<span class="bad">Supabase is not configured. Add the publishable key to this file first.</span>';
+      render(); return;
+    }
+    if (!client) client = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    loginMessage = '<span class="mu">Opening employee access…</span>';
+    render();
+    try {
+      await client.auth.signOut();
+      const { data, error } = await client.rpc("erp_employee_snapshot");
+      if (error) throw error;
+      const result = typeof data === "string" ? JSON.parse(data) : data;
+      normalizeState(result.state, "employee");
+      remoteRevision = Number(result.revision) || 0;
+      activeRole = "employee"; backendReady = true; remoteSaveBlocked = false;
+      tab = "Move"; loginMessage = "";
+      status("Employee access · shared inventory");
+      render();
+    } catch (e) {
+      activeRole = ""; backendReady = false;
+      loginMessage = '<span class="bad">' + esc(e.message || "Could not open employee access.") + '</span>';
+      render();
+    }
   };
   logout = async function () {
     if (activeRole === "management") await flushPendingSaves();
@@ -659,3 +682,4 @@ render();
 })();
 
 </script></body></html>
+
